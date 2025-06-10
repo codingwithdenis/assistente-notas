@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Ferramenta de Revisão de Vídeo</title>
+  <style>
+    /* Estilos básicos Light Mode */
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f7f7f7;
+      color: #333;
+    }
+    /* Dark Mode: adiciona a classe "dark-mode" no body para aplicar os estilos */
+    body.dark-mode {
+      background: #1e1e1e;
+      color: #ccc;
+    }
+    /* Container Flex para área principal e sidebar */
+    .main-container {
+      display: flex;
+      max-width: 1200px;
+      margin: 20px auto;
+      gap: 20px;
+    }
+    .content {
+      flex: 3;
+      background: white;
+      padding: 15px;
+      border: 1px solid #ccc;
+    }
+    body.dark-mode .content {
+      background: #2e2e2e;
+      border-color: #555;
+    }
+    .sidebar {
+      flex: 1;
+      background: #fff;
+      padding: 15px;
+      border: 1px solid #ccc;
+      max-height: 600px;
+      overflow-y: auto;
+    }
+    body.dark-mode .sidebar {
+      background: #2e2e2e;
+      border-color: #555;
+    }
+    /* Controles superiores e separadores de linhas */
+    .controls-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .controls-row.row-justify {
+      justify-content: space-between;
+    }
+    button {
+      background: #EAEAEA;
+      padding: 8px;
+      cursor: pointer;
+      border: none;
+      border-radius: 4px;
+
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    /* Estilos para o botão de Procurar Vídeo e Dark Mode (na parte superior) */
+    .video-top-controls {
+      margin-bottom: 10px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    /* Player e timeline */
+    .video-container {
+      position: relative;
+      margin: 10px;
+    }
+    #videoPlayer {
+      width: 100%;
+      background: #000;
+    }
+    .timeline {
+      display: flex;
+      justify-content: center;
+      font-family: monospace;
+      margin-top: 5px;
+    }
+    /* Sobreposição para Facecam (alinhada ao canto superior esquerdo) */
+    #facecamOverlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      padding: 10px 20px;
+      background: rgba(255, 0, 0, 0.8);
+      color: #fff;
+      font-weight: bold;
+      font-size: 20px;
+      display: none;
+      z-index: 2;
+      border-radius: 4px;
+    }
+    /* Modais */
+  .modal {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-40%, 12%);
+    background: white;
+    padding: 20px;
+    border: 1px solid #ccc;
+    z-index: 1000;
+    box-shadow: 0px 0px 10px rgba(0,0,0,0.3);
+    max-width: 200px;
+    width: 50%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+    body.dark-mode .modal {
+      background: #2e2e2e;
+      border-color: #555;
+      color: #ccc;
+    }
+    .modal input[type="text"],
+    .modal textarea {
+      width: 100%;
+      margin: 5px 0;
+      padding: 5px;
+    }
+    /* Estilização dos itens da sidebar */
+    .history-item {
+      padding: 8px;
+      margin-bottom: 5px;
+      border: 1px solid #CCCCCC;
+      background: #fafafa;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    body.dark-mode .history-item {
+      background: #2e2e2e;
+      border-color: #555;
+    }
+    .history-item:hover {
+      background: #f0f0f0;
+    }
+    body.dark-mode .history-item:hover {
+      background: #555;
+    }
+    .history-text {
+      flex: 1;
+    }
+    .delete-btn, .view-btn {
+      background: #e74c3c;
+      border: none;
+      color: white;
+      padding: 3px 6px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    .view-btn {
+      background: #3498db;
+    }
+    /* Novos estilos para itens expansíveis e botão de edição */
+    .history-item.expanded {
+      background: #e6f7ff;
+    }
+    body.dark-mode .history-item.expanded {
+      background: #1a3a4e;
+    }
+    .list-options {
+      padding: 5px;
+      border-top: 1px solid #eee;
+      margin-top: 5px;
+      width: 100%;
+      display: none;
+    }
+    body.dark-mode .list-options {
+      border-color: #555;
+    }
+    .list-option-item {
+      padding: 3px 0;
+    }
+    .edit-btn {
+      background: #2ecc71;
+      border: none;
+      color: white;
+      padding: 3px 6px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    .expand-btn {
+      cursor: pointer;
+      margin-right: 5px;
+      display: inline-block;
+      width: 20px;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="main-container">
+    <!-- Área principal: vídeo, controles, modais -->
+    <div class="content">
+      <!-- Controles superiores: Procurar Vídeo e Dark Mode -->
+      <div class="video-top-controls">
+        <input type="file" id="videoInput" accept="video/*" hidden>
+        <button onclick="document.getElementById('videoInput').click()" title="Seleção de vídeo no dispositivo." style="display: flex; align-items: center; gap: 5px;"><img src="images\Procurar.png" alt="Icon" width="15" height="15">Procurar Vídeo</button>
+        <button onclick="toggleDarkMode()" title="Alternância entre modo claro e escuro." style="display: flex; align-items: center; gap: 5px;"><img src="images\Mode.png" alt="Icon" width="15" height="15">Dark/Light Mode</button>
+      </div>
+      
+      <!-- Player de Vídeo -->
+      <div class="video-container">
+        <video id="videoPlayer" controls></video>
+        <!-- Sobreposição para Facecam -->
+        <div id="facecamOverlay">Foco Instrutor</div>
+        <div class="timeline">
+          <span id="timeDisplay">0:00.000</span>
+        </div>
+      </div>
+
+      <!-- Linha 1 de botões: Lower Third, Acessibilidade, Lettering, Lista e Atenção -->
+      <div class="controls-row">
+        <button id="lowerThirdBtn" onclick="showModal('lowerThirdModal')" title="Nome e cargo da pessoa instrutora." style="display: flex; align-items: center; gap: 5px;"><img src="images\Lower Third.png" alt="Icon" width="15" height="15">Lower Third</button>
+        <!-- <button id="acessibilidadeBtn">Acessibilidade</button> -->
+        <button onclick="showModal('letteringModal')" title="Destaque de frase ou palavra-chave limitado a 40 caracteres."style="display: flex; align-items: center; gap: 5px;"><img src="images\Lettering.png" alt="Icon" width="15" height="15">Lettering</button>
+        <button onclick="showModal('listModal')" title="Apresentação de tópicos em lista."style="display: flex; align-items: center; gap: 5px;"><img src="images\Lista.png" alt="Icon" width="15" height="15">Lista</button>
+        <button onclick="showModal('atencaoModal')" title="Inserção de mensagens ou avisos para a edição."style="display: flex; align-items: center; gap: 5px;"><img src="images\Observações.png" alt="Icon" width="15" height="15">Observações</button>
+      </div>
+
+      <!-- Linha 2 de botões: Corte IN e Corte OUT -->
+      <div class="controls-row">
+        <button id="cutIn" title=" Ponto inicial do corte."style="display: flex; align-items: center; gap: 5px;"><img src="images\Corte.png" alt="Icon" width="15" height="15">Corte IN</button>
+        <button id="cutOut" title="Ponto final do corte." disabled style="display: flex; align-items: center; gap: 5px;"> <img src="images\Corte.png" alt="Icon" width="15" height="15">Corte OUT</button>
+      </div>
+
+      <!-- Linha 3 de botões: Facecam (à esquerda) e Exportar (à direita) -->
+      <div class="controls-row row-justify">
+        <button id="facecamBtn" onclick="toggleFacecam()" title="Pessoa instrutora em tela cheia."style="display: flex; align-items: center; gap: 5px;"><img src="images\Foco instrutor.png" alt="Icon" width="15" height="15">Foco Instrutor</button>
+        <button onclick="exportData()" title="Download do arquivo final." style="display: flex; align-items: center; gap: 5px;"><img src="images\Exportar.png" alt="Icon" width="15" height="15">Exportar</button>
+      </div>
+
+      <!-- Modais -->
+      <div id="letteringModal" class="modal">
+        <h3>Lettering</h3>
+        <!-- Utiliza textarea para permitir "enter" e é limitado a 40 caracteres -->
+        <textarea maxlength="40" id="letteringText" placeholder="Digite o texto"></textarea>
+        <div style="margin-top:10px;">
+          <button onclick="saveLettering()">OK</button>
+          <button onclick="hideModal('letteringModal')">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="listModal" class="modal">
+        <h3>Lista</h3>
+        <!-- Título limitado a 23 caracteres -->
+        <input type="text" placeholder="Título" id="listTitle" maxlength="23"><br>
+        <!-- Itens da lista limitados a 44 caracteres -->
+        <input type="text" placeholder="Opção 1" class="listOption" maxlength="44"><br>
+        <input type="text" placeholder="Opção 2" class="listOption" maxlength="44"><br>
+        <input type="text" placeholder="Opção 3" class="listOption" maxlength="44"><br>
+        <input type="text" placeholder="Opção 4" class="listOption" maxlength="44"><br>
+        <div style="margin-top:10px;">
+          <button onclick="saveList()">OK</button>
+          <button onclick="hideModal('listModal')">Cancelar</button>
+        </div>
+      </div>
+
+      <div id="lowerThirdModal" class="modal">
+        <h3>Lower Third</h3>
+        <input type="text" placeholder="Nome" id="lowerName"><br>
+        <input type="text" placeholder="Cargo" id="lowerRole"><br>
+        <div style="margin-top:10px;">
+          <button onclick="saveLowerThird()">OK</button>
+          <button onclick="hideModal('lowerThirdModal')">Cancelar</button>
+        </div>
+      </div>
+      
+      <div id="atencaoModal" class="modal">
+        <h3>Atenção</h3>
+        <input type="text" maxlength="40" id="atencaoText" placeholder="Digite a mensagem de atenção">
+        <div style="margin-top:10px;">
+          <button onclick="saveAtencao()">OK</button>
+          <button onclick="hideModal('atencaoModal')">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar de Revisão -->
+    <div class="sidebar">
+      <h3>Histórico de Alterações</h3>
+      <div id="historyList">
+        <!-- Os itens serão inseridos aqui -->
+      </div>
+    </div>
+  </div>
+
+<script>
+    // Adapta o tema de acordo com a preferência do sistema
+    if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      document.body.classList.add('dark-mode');
+    }
+
+    const video = document.getElementById('videoPlayer');
+    const videoInput = document.getElementById('videoInput');
+    const cutInBtn = document.getElementById('cutIn');
+    const cutOutBtn = document.getElementById('cutOut');
+    const acessibilidadeBtn = document.getElementById('acessibilidadeBtn');
+    const facecamBtn = document.getElementById('facecamBtn');
+    const facecamOverlay = document.getElementById('facecamOverlay');
+    const historyListEl = document.getElementById('historyList');
+    let historyData = [];
+    let currentAction = null;
+    // Removemos a constante framerate, pois agora trabalhamos com milissegundos
+    let videoFileName = "";
+    // Variável para registrar o estado do facecam
+    let facecamActive = false;
+    let facecamStartTime = 0;
+    // Flag para desabilitar a lógica de pular cortes durante a pré-visualização
+    let isPreviewingCut = false;
+
+    videoInput.addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (file) {
+    video.src = URL.createObjectURL(file);
+    videoFileName = file.name;
+
+    // Limpa todas as anotações e estado relacionado
+    historyData = [];
+    currentAction = null;
+    isPreviewingCut = false;
+    facecamActive = false;
+    facecamOverlay.style.display = 'none';
+    cutOutBtn.disabled = true;
+    disableButtons(false);
+
+    // Atualiza a sidebar (ela vai ficar vazia)
+    updateSidebar();
+  }
+});
+
+    // Controles de teclado: se o foco estiver em um input ou textarea, não processa os atalhos
+    document.addEventListener('keydown', (e) => {
+      const tag = document.activeElement.tagName.toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+
+      if (e.code === 'Space') {
+        video.paused ? video.play() : video.pause();
+        e.preventDefault();
+      }
+      if (e.code === 'ArrowRight') {
+        video.pause();
+        video.currentTime += 0.033; // Aproximadamente 33ms
+      }
+      if (e.code === 'ArrowLeft') {
+        video.pause();
+        video.currentTime -= 0.033;
+      }
+    });
+
+    // Atualizar timeline e, na reprodução normal, pular as áreas de corte
+    video.addEventListener('timeupdate', updateTimeline);
+    function updateTimeline() {
+      const time = video.currentTime;
+      document.getElementById('timeDisplay').textContent = formatTime(time);
+      
+      if (!video.paused && !isPreviewingCut) {
+        historyData.forEach(item => {
+          if (item.type === 'corte') {
+            if (video.currentTime >= item.start && video.currentTime < item.end) {
+              video.currentTime = item.end;
+            }
+          }
+        });
+      }
+    }
+
+    // Função para formatar o tempo (minuto:segundo.milisegundo)
+    function formatTime(time) {
+      const minutes = Math.floor(time / 60);
+      const seconds = Math.floor(time % 60);
+      const milliseconds = Math.floor((time % 1) * 1000);
+      return `${minutes}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`;
+    }
+
+    // Converter de "minuto:segundo.milisegundo" para segundos
+    function parseTime(timeStr) {
+      const parts = timeStr.split(/[:.]/);
+      if (parts.length < 3) throw new Error('Formato inválido');
+      
+      const minutes = parseInt(parts[0]);
+      const seconds = parseInt(parts[1]);
+      const milliseconds = parseInt(parts[2]);
+      
+      if (isNaN(minutes) || isNaN(seconds) || isNaN(milliseconds)) {
+        throw new Error('Valores inválidos');
+      }
+      
+      return minutes * 60 + seconds + milliseconds / 1000;
+    }
+
+    // Botões de Corte IN/OUT
+    cutInBtn.addEventListener('click', () => {
+      currentAction = { type: 'corte', start: video.currentTime };
+      disableButtons(true);
+      cutOutBtn.disabled = false;
+    });
+
+    cutOutBtn.addEventListener('click', () => {
+      currentAction.end = video.currentTime;
+      historyData.push(currentAction);
+      currentAction = null;
+      disableButtons(false);
+      cutOutBtn.disabled = true;
+      updateSidebar();
+    });
+
+    function disableButtons(disable) {
+      document.querySelectorAll('.controls-row button').forEach(btn => {
+        if (btn !== cutOutBtn && btn !== cutInBtn) {
+          btn.disabled = disable;
+        }
+      });
+    }
+
+    // Modais: ao abrir, pausa o vídeo
+    function showModal(modalId) {
+      video.pause();
+      document.getElementById(modalId).style.display = 'block';
+    }
+    function hideModal(modalId) {
+      document.getElementById(modalId).style.display = 'none';
+    }
+
+    // Lettering
+    function saveLettering() {
+      const text = document.getElementById('letteringText').value.trim();
+      if (text) {
+        historyData.push({
+          type: 'lettering',
+          time: video.currentTime,
+          text: text
+        });
+        updateSidebar();
+      }
+      document.getElementById('letteringText').value = '';
+      hideModal('letteringModal');
+    }
+
+    // Lista
+    function saveList() {
+      const options = Array.from(document.getElementsByClassName('listOption')).map(o => o.value.trim());
+      const titulo = document.getElementById('listTitle').value.trim();
+      if (titulo) {
+        historyData.push({
+          type: 'lista',
+          time: formatTime(video.currentTime),
+          titulo: titulo,
+          opcao1: options[0] || "",
+          opcao2: options[1] || "",
+          opcao3: options[2] || "",
+          opcao4: options[3] || ""
+        });
+        updateSidebar();
+      }
+      document.getElementById('listTitle').value = '';
+      Array.from(document.getElementsByClassName('listOption')).forEach(o => o.value = '');
+      hideModal('listModal');
+    }
+
+    // Lower Third
+    function saveLowerThird() {
+      const nome = document.getElementById('lowerName').value.trim();
+      const cargo = document.getElementById('lowerRole').value.trim();
+      if (nome || cargo) {
+        historyData.push({
+          type: 'lowerThird',
+          time: video.currentTime,
+          nome: nome,
+          cargo: cargo
+        });
+        updateSidebar();
+      }
+      document.getElementById('lowerName').value = '';
+      document.getElementById('lowerRole').value = '';
+      hideModal('lowerThirdModal');
+    }
+
+    // Atenção
+    function saveAtencao() {
+      const text = document.getElementById('atencaoText').value.trim();
+      if (text) {
+        historyData.push({
+          type: 'atencao',
+          time: video.currentTime,
+          text: text
+        });
+        updateSidebar();
+      }
+      document.getElementById('atencaoText').value = '';
+      hideModal('atencaoModal');
+    }
+
+    // Acessibilidade: registra o tempo atual
+    acessibilidadeBtn.addEventListener('click', () => {
+      historyData.push({
+        type: 'acessibilidade',
+        time: video.currentTime
+      });
+      updateSidebar();
+    });
+
+    // Facecam: alterna a exibição da sobreposição e registra os tempos de entrada/saída
+    function toggleFacecam() {
+      if (!facecamActive) {
+        facecamOverlay.style.display = 'block';
+        facecamStartTime = video.currentTime;
+        facecamActive = true;
+      } else {
+        const facecamEndTime = video.currentTime;
+        facecamOverlay.style.display = 'none';
+        facecamActive = false;
+        historyData.push({
+          type: 'facecam',
+          start: facecamStartTime,
+          end: facecamEndTime
+        });
+        updateSidebar();
+      }
+    }
+
+    // Exportar: transforma os tempos para o formato desejado e gera o JSON
+    function exportData() {
+      const transformedData = historyData.map(item => {
+        const newItem = { ...item };
+        if (item.type === 'corte' || item.type === 'facecam') {
+          newItem.start = formatTime(item.start);
+          newItem.end = formatTime(item.end);
+        } else if (
+          item.type === 'lettering' ||
+          item.type === 'lowerThird' ||
+          item.type === 'acessibilidade' ||
+          item.type === 'atencao'
+        ) {
+          newItem.time = formatTime(item.time);
+        }
+        // Para listas o tempo já foi salvo formatado
+        return newItem;
+      });
+      const data = JSON.stringify(transformedData, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      let filename = "video_edicao.json";
+      if (videoFileName) {
+        filename = videoFileName.replace(/\.[^/.]+$/, "") + ".json";
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+    }
+
+    // Função para obter o tempo do item para ordenação
+    function getItemTime(item) {
+      if (item.type === 'corte' || item.type === 'facecam') {
+        return item.start;
+      } else if (item.type === 'lista') {
+        return parseTime(item.time); // Converte string de tempo para segundos
+      } else {
+        return item.time;
+      }
+    }
+
+    // Atualizar a sidebar com o histórico ORDENADO
+    function updateSidebar() {
+      // Ordenar histórico por tempo (do mais antigo para o mais recente)
+      const sortedHistory = [...historyData].sort((a, b) => getItemTime(a) - getItemTime(b));
+      
+      historyListEl.innerHTML = '';
+      sortedHistory.forEach((item, sortedIndex) => {
+        const originalIndex = historyData.indexOf(item);
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        if (item.type === 'lista' && item.expanded) {
+          div.classList.add('expanded');
+        }
+        
+        let text = "";
+        let displayTime = "";
+
+        // Determinar o tempo para exibição
+        if (item.type === 'corte' || item.type === 'facecam') {
+          displayTime = `${formatTime(item.start)} a ${formatTime(item.end)}`;
+        } else if (item.type === 'lista') {
+          displayTime = item.time; // Já está formatado
+        } else {
+          displayTime = formatTime(item.time);
+        }
+
+        // Criar texto para exibição
+        let expandBtn;
+        switch (item.type) {
+          case 'corte':
+            text = `Corte: ${displayTime}`;
+            break;
+          case 'lettering':
+            text = `Lettering (${displayTime}): ${item.text}`;
+            break;
+          case 'lista':
+            text = `Lista (${displayTime}): ${item.titulo}`;
+            // Adicionar botão de expansão
+            expandBtn = document.createElement('span');
+            expandBtn.className = 'expand-btn';
+            expandBtn.textContent = item.expanded ? '▼' : '►';
+            div.appendChild(expandBtn);
+            break;
+          case 'lowerThird':
+            text = `Lower Third (${displayTime}): ${item.nome} - ${item.cargo}`;
+            break;
+          case 'acessibilidade':
+            text = `Acessibilidade (${displayTime})`;
+            break;
+          case 'facecam':
+            text = `Foco Instrutor: ${displayTime}`;
+            break;
+          case 'atencao':
+            text = `Atenção (${displayTime}): ${item.text}`;
+            break;
+          default:
+            text = `${item.type} (${displayTime})`;
+        }
+
+        const span = document.createElement('span');
+        span.className = 'history-text';
+        span.textContent = text;
+        div.appendChild(span);
+
+        // Botão de edição
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.textContent = "Editar";
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          openEditModal(item, originalIndex);
+        };
+        div.appendChild(editBtn);
+
+        // Botão de remoção
+        const delBtn = document.createElement('button');
+        delBtn.className = 'delete-btn';
+        delBtn.textContent = "X";
+        delBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm("Tem certeza que deseja remover esta alteração?")) {
+            historyData.splice(originalIndex, 1);
+            updateSidebar();
+          }
+        };
+        div.appendChild(delBtn);
+
+        // Para listas: adicionar opções expandíveis
+        if (item.type === 'lista') {
+          const optionsDiv = document.createElement('div');
+          optionsDiv.className = 'list-options';
+          optionsDiv.style.display = item.expanded ? 'block' : 'none';
+          
+          [item.opcao1, item.opcao2, item.opcao3, item.opcao4].forEach(opt => {
+            if (opt) {
+              const optDiv = document.createElement('div');
+              optDiv.className = 'list-option-item';
+              optDiv.textContent = `• ${opt}`;
+              optionsDiv.appendChild(optDiv);
+            }
+          });
+          
+          div.appendChild(optionsDiv);
+          
+          // Evento para expandir/recolher
+          div.addEventListener('click', (e) => {
+            if (e.target !== editBtn && e.target !== delBtn && e.target !== expandBtn) {
+              item.expanded = !item.expanded;
+              optionsDiv.style.display = item.expanded ? 'block' : 'none';
+              if (expandBtn) expandBtn.textContent = item.expanded ? '▼' : '►';
+              div.classList.toggle('expanded', item.expanded);
+            }
+          });
+        } else {
+          // Para outros itens: pular para o tempo ao clicar
+          div.addEventListener('click', (e) => {
+            if (e.target !== editBtn && e.target !== delBtn) {
+              jumpTo(item.start || item.time);
+            }
+          });
+        }
+
+        historyListEl.appendChild(div);
+      });
+    }
+
+    // Função para abrir modal de edição
+    function openEditModal(item, index) {
+      // Criar modal de edição dinamicamente
+      const modalId = 'editModal';
+      let existingModal = document.getElementById(modalId);
+      
+      if (existingModal) {
+        existingModal.remove();
+      }
+      
+      const modal = document.createElement('div');
+      modal.id = modalId;
+      modal.className = 'modal';
+      
+      let modalContent = `<h3>Editar</h3>`;
+      
+      // Campos específicos para cada tipo
+      switch (item.type) {
+        case 'corte':
+        case 'facecam':
+          modalContent += `
+            <label>Início (min:seg.ms):</label>
+            <input type="text" id="editStart" value="${formatTime(item.start)}">
+            <label>Fim (min:seg.ms):</label>
+            <input type="text" id="editEnd" value="${formatTime(item.end)}">
+          `;
+          break;
+          
+        case 'lettering':
+        case 'atencao':
+          modalContent += `
+            <label>Tempo (min:seg.ms):</label>
+            <input type="text" id="editTime" value="${formatTime(item.time)}">
+            <label>Texto:</label>
+            <textarea id="editText" maxlength="40">${item.text}</textarea>
+          `;
+          break;
+          
+        case 'lista':
+          modalContent += `
+            <label>Tempo (min:seg.ms):</label>
+            <input type="text" id="editTime" value="${item.time}">
+            <label>Título:</label>
+            <input type="text" id="editTitle" value="${item.titulo}" maxlength="23">
+            <label>Opções:</label>
+            <input type="text" class="editOption" value="${item.opcao1 || ''}" placeholder="Opção 1" maxlength="44">
+            <input type="text" class="editOption" value="${item.opcao2 || ''}" placeholder="Opção 2" maxlength="44">
+            <input type="text" class="editOption" value="${item.opcao3 || ''}" placeholder="Opção 3" maxlength="44">
+            <input type="text" class="editOption" value="${item.opcao4 || ''}" placeholder="Opção 4" maxlength="44">
+          `;
+          break;
+          
+        case 'lowerThird':
+          modalContent += `
+            <label>Tempo (min:seg.ms):</label>
+            <input type="text" id="editTime" value="${formatTime(item.time)}">
+            <label>Nome:</label>
+            <input type="text" id="editName" value="${item.nome}">
+            <label>Cargo:</label>
+            <input type="text" id="editRole" value="${item.cargo}">
+          `;
+          break;
+          
+        case 'acessibilidade':
+          modalContent += `
+            <label>Tempo (min:seg.ms):</label>
+            <input type="text" id="editTime" value="${formatTime(item.time)}">
+          `;
+          break;
+      }
+      
+      modalContent += `
+        <div style="margin-top:10px;">
+          <button onclick="saveEdit(${index})">Salvar</button>
+          <button onclick="document.getElementById('${modalId}').style.display='none'">Cancelar</button>
+        </div>
+      `;
+      
+      modal.innerHTML = modalContent;
+      document.body.appendChild(modal);
+      modal.style.display = 'block';
+    }
+
+    // Função para salvar edições
+    function saveEdit(index) {
+      const item = historyData[index];
+      const modal = document.getElementById('editModal');
+      
+      try {
+        switch (item.type) {
+          case 'corte':
+          case 'facecam':
+            item.start = parseTime(document.getElementById('editStart').value);
+            item.end = parseTime(document.getElementById('editEnd').value);
+            break;
+            
+          case 'lettering':
+          case 'atencao':
+            item.time = parseTime(document.getElementById('editTime').value);
+            item.text = document.getElementById('editText').value;
+            break;
+            
+          case 'lista':
+            item.time = document.getElementById('editTime').value;
+            item.titulo = document.getElementById('editTitle').value;
+            const options = Array.from(document.getElementsByClassName('editOption')).map(o => o.value.trim());
+            item.opcao1 = options[0] || "";
+            item.opcao2 = options[1] || "";
+            item.opcao3 = options[2] || "";
+            item.opcao4 = options[3] || "";
+            break;
+            
+          case 'lowerThird':
+            item.time = parseTime(document.getElementById('editTime').value);
+            item.nome = document.getElementById('editName').value;
+            item.cargo = document.getElementById('editRole').value;
+            break;
+            
+          case 'acessibilidade':
+            item.time = parseTime(document.getElementById('editTime').value);
+            break;
+        }
+        
+        updateSidebar();
+        modal.style.display = 'none';
+      } catch (e) {
+        alert('Formato de tempo inválido! Use o formato min:seg.ms (ex: 1:23.456)');
+      }
+    }
+
+    // Pular para o tempo indicado
+    function jumpTo(time) {
+      video.currentTime = time;
+    }
+
+    // Função para alternar entre Dark e Light Mode
+    function toggleDarkMode() {
+      document.body.classList.toggle('dark-mode');
+    }
+
+    
+  </script>
+</body>
+</html>
